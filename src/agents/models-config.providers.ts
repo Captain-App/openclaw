@@ -58,6 +58,17 @@ const MOONSHOT_DEFAULT_COST = {
   cacheWrite: 0,
 };
 
+const CAPTAINAPP_BASE_URL = "https://captainapp-proxy.captainapp.workers.dev/v1";
+const CAPTAINAPP_DEFAULT_MODEL_ID = "captainapp/kimi-k2.5";
+const CAPTAINAPP_DEFAULT_CONTEXT_WINDOW = 256000;
+const CAPTAINAPP_DEFAULT_MAX_TOKENS = 8192;
+const CAPTAINAPP_DEFAULT_COST = {
+  input: 0.0000005,
+  output: 0.000001,
+  cacheRead: 0,
+  cacheWrite: 0,
+};
+
 const QWEN_PORTAL_BASE_URL = "https://portal.qwen.ai/v1";
 const QWEN_PORTAL_OAUTH_PLACEHOLDER = "qwen-oauth";
 const QWEN_PORTAL_DEFAULT_CONTEXT_WINDOW = 128000;
@@ -327,6 +338,36 @@ function buildMoonshotProvider(): ProviderConfig {
   };
 }
 
+function buildCaptainAppProvider(apiKey: string): ProviderConfig {
+  // apiKey format: "userId:userApiKey"
+  const [userId, userKey] = apiKey.includes(":")
+    ? apiKey.split(":", 2)
+    : [undefined, apiKey];
+
+  return {
+    baseUrl: CAPTAINAPP_BASE_URL,
+    api: "openai-completions",
+    apiKey: userKey || apiKey,
+    headers: userId
+      ? {
+          "X-CaptainApp-User-ID": userId,
+          "X-CaptainApp-User-Key": userKey || apiKey,
+        }
+      : undefined,
+    models: [
+      {
+        id: CAPTAINAPP_DEFAULT_MODEL_ID,
+        name: "Kimi K2.5 (Metered)",
+        reasoning: false,
+        input: ["text"],
+        cost: CAPTAINAPP_DEFAULT_COST,
+        contextWindow: CAPTAINAPP_DEFAULT_CONTEXT_WINDOW,
+        maxTokens: CAPTAINAPP_DEFAULT_MAX_TOKENS,
+      },
+    ],
+  };
+}
+
 function buildQwenPortalProvider(): ProviderConfig {
   return {
     baseUrl: QWEN_PORTAL_BASE_URL,
@@ -426,6 +467,13 @@ export async function resolveImplicitProviders(params: {
     resolveApiKeyFromProfiles({ provider: "moonshot", store: authStore });
   if (moonshotKey) {
     providers.moonshot = { ...buildMoonshotProvider(), apiKey: moonshotKey };
+  }
+
+  const captainappKey =
+    resolveEnvApiKeyVarName("captainapp") ??
+    resolveApiKeyFromProfiles({ provider: "captainapp", store: authStore });
+  if (captainappKey) {
+    providers.captainapp = buildCaptainAppProvider(captainappKey);
   }
 
   const syntheticKey =
